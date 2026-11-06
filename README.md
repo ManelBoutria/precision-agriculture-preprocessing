@@ -1,6 +1,5 @@
 # Precision agriculture monitoring - data preparation and preprocessing
 
-Common, leakage-free data preparation for the Master 1 machine learning mini-project "Precision agriculture monitoring" (groups 1 and 2). The other groups train and compare their models on top of this repository, so that every result uses the same data, the same splits and the same preprocessing.
 
 ## What the project is about
 
