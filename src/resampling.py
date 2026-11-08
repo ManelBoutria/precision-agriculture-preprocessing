@@ -32,7 +32,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score, f1_score, recall_score
 
 sys.path.insert(0, str(Path(__file__).parent))
-from preprocessing import SEED, build_pipeline, load_dev_and_folds  # noqa: E402
+from preprocessing import (SEED, build_pipeline, load_dev_and_folds,  # noqa: E402
+                           load_final_dev_and_folds)
 
 CSV = "data/precision_agriculture_dataset.csv"
 STRATEGIES = ["none", "class_weight", "smote", "adasyn", "undersample"]
@@ -51,14 +52,15 @@ def make_sampler(strategy):
             "undersample": RandomUnderSampler(random_state=SEED)}.get(strategy)
 
 
-def build(model_name, strategy, X):
+def build(model_name, strategy, X, prepared=False):
     cw = "balanced" if strategy == "class_weight" else None
     return build_pipeline(make_model(model_name, cw), X,
-                          scale=(model_name == "logreg"), sampler=make_sampler(strategy))
+                          scale=(model_name == "logreg"), sampler=make_sampler(strategy),
+                          prepared=prepared)
 
 
-def _one(X, y, fold_id, tr, va, model_name, strategy):
-    pipe = build(model_name, strategy, X)
+def _one(X, y, fold_id, tr, va, model_name, strategy, prepared=False):
+    pipe = build(model_name, strategy, X, prepared)
     pipe.fit(X.iloc[tr], y.iloc[tr])
     pred = pipe.predict(X.iloc[va])
     yv = y.iloc[va]
@@ -70,13 +72,14 @@ def _one(X, y, fold_id, tr, va, model_name, strategy):
                 **{f"recall_{c}": r for c, r in zip(classes, rec)})
 
 
-def run(csv=CSV, n_jobs=2):
-    X, y, folds = load_dev_and_folds(csv)
+def run(csv=CSV, n_jobs=2, prepared=False):
+    """prepared=True: read data/final_data_dev.csv (already cleaned, encoded, scaled)."""
+    X, y, folds = load_final_dev_and_folds() if prepared else load_dev_and_folds(csv)
     jobs = [(i, tr, va, m, s) for i, (tr, va) in enumerate(folds)
             for m in ("logreg", "rf") for s in STRATEGIES]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        rows = Parallel(n_jobs=n_jobs)(delayed(_one)(X, y, i, tr, va, m, s)
+        rows = Parallel(n_jobs=n_jobs)(delayed(_one)(X, y, i, tr, va, m, s, prepared)
                                        for i, tr, va, m, s in jobs)
     return pd.DataFrame(rows)
 
@@ -100,15 +103,22 @@ def summarize(df):
 
 
 if __name__ == "__main__":
-    df = run()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", choices=["raw", "final"], default="raw",
+                    help="raw: original CSV + preprocessing inside each fold (default, no leakage); "
+                         "final: data/final_data_dev.csv, already scaled (outputs get a _final suffix)")
+    args = ap.parse_args()
+    sfx = "_final" if args.data == "final" else ""
+    df = run(prepared=args.data == "final")
     Path("results").mkdir(exist_ok=True)
     Path("figures").mkdir(exist_ok=True)
-    df.to_csv("results/resampling_per_fold.csv", index=False)
+    df.to_csv(f"results/resampling_per_fold{sfx}.csv", index=False)
     summ = summarize(df)
-    summ.to_csv("results/resampling_summary.csv", index=False)
+    summ.to_csv(f"results/resampling_summary{sfx}.csv", index=False)
     rc = [c for c in df.columns if c.startswith("recall_")]
     rec = df.groupby(["model", "strategy"])[rc].mean()
-    rec.to_csv("results/resampling_recall_by_class.csv")
+    rec.to_csv(f"results/resampling_recall_by_class{sfx}.csv")
     pd.set_option("display.width", 200)
     print(summ[["model", "strategy", "macro_f1", "macro_f1_diff_vs_none", "macro_f1_diff_se",
                 "balanced_acc", "balanced_acc_diff_vs_none", "balanced_acc_diff_se",
@@ -128,4 +138,4 @@ if __name__ == "__main__":
         ax.tick_params(axis="x", rotation=30)
     axes[0].legend()
     fig.tight_layout()
-    fig.savefig("figures/resampling_comparison.png", dpi=150)
+    fig.savefig(f"figures/resampling_comparison{sfx}.png", dpi=150)
