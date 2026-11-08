@@ -1,6 +1,6 @@
 # Time-Series Exploration and Decision Gate
 
-Student 3 | Master 1 mini-project: Precision agriculture monitoring using machine learning models
+AIT HOCINE KHADIDJA | Master 1 mini-project: Precision agriculture monitoring using machine learning models
 
 ## Summary of findings
 
