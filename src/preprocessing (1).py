@@ -1,22 +1,4 @@
-"""preprocessing.py - final preprocessing pipeline (assembly).
 
-Pieces:
-  - Student 1: fixed leakage columns + categorical branch (impute + one-hot)
-  - Student 2: outliers_scaling.py (OutlierClipper, get_scaler)   [imported if present]
-  - Student 3: folds from make_splits.py (dev_index.csv, splits_validation.csv)
-  - Student 4: feature selection / rebalancing slots, final assembly
-
-Everything that LEARNS from data (imputer, clipper bounds, scaler, encoder,
-selector, sampler) lives inside the Pipeline, so it is fitted on the training
-fold only.  Fixed rules (dropping leakage columns) are applied once, before.
-
-Usage (from the repo root, or add ../src to sys.path in a notebook):
-    from preprocessing import load_dev_and_folds, build_pipeline
-
-Run as a script it PRODUCES THE NEW DATASETS for the other groups:
-    python src/preprocessing.py
-writes data/cleaned/precision_agriculture_{cleaned,preprocessed}_{dev,test}.csv
-(needs results/splits/ from make_splits.py).
 """
 import warnings
 from pathlib import Path
