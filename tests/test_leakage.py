@@ -1,7 +1,4 @@
-"""Leakage tests for the preprocessing pipeline (Student 4, week 2).
 
-Run from the repo root:   python -m pytest tests -v
-"""
 import sys
 from pathlib import Path
 
