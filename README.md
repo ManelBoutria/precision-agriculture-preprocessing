@@ -82,7 +82,7 @@ src/         preprocessing.py          the pipeline everybody imports
              outliers_scaling.py       outlier clipping and scalers
              eda_data.py               exploration
              make_splits.py            test set and folds
-             week1_analysis.py         correlations, VIF, PCA, t-SNE/UMAP, separability
+             feature_analysis.py         correlations, VIF, PCA, t-SNE/UMAP, separability
              feature_selection.py      ANOVA, RFE, L1 inside the 30 folds
              resampling.py             class_weight, SMOTE, ADASYN, undersampling
 tests/       test_leakage.py           10 leakage and reproducibility tests
@@ -90,15 +90,3 @@ results/     splits/ and the result tables (CSV)
 figures/     plots
 ```
 
-## Reproduce
-
-```
-pip install -r requirements.txt
-python src/make_splits.py          # only if results/splits is missing
-python src/week1_analysis.py
-python src/feature_selection.py
-python src/resampling.py           # about 10 minutes
-python -m pytest tests -v
-```
-
-The seed is 42 everywhere. Python version: write the one the group uses here.
