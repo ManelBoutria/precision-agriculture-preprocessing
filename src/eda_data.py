@@ -1,15 +1,5 @@
 """
 eda_data.py
-===========
-ينشئ ملف Exploratory_Data.csv: سطر واحد لكل متغير (variable) وبنفس الأعمدة
-المطلوبة في مخطط الوثيقة.
-
-ملاحظة منهجية: كل الأرقام هنا وصفية (EDA) للتقرير فقط، ولا تُستعمل لتحويل
-البيانات قبل النمذجة (لتفادي data leakage).
-
-التشغيل:
-    python src/eda_data.py --data data/precision_agriculture_dataset.csv \
-                           --out  results/Exploratory_Data.csv
 """
 
 import argparse
@@ -26,25 +16,25 @@ from sklearn.tree import DecisionTreeClassifier
 warnings.filterwarnings("ignore")
 
 # ----------------------------------------------------------------------
-# 0) الإعدادات (غيّروها هنا فقط)
+# Parameters: (can be chanched) 
 # ----------------------------------------------------------------------
-SEED = 42                       # seed موحّد لكل العمليات العشوائية
+SEED = 42                       # seed 
 TARGET = "environmental_condition"
 TIME_COL = "timestamp"
-ID_COLS = ["sensor_node_id"]    # معرّفات (لا تُعامل كمتغيرات عددية)
-KEY_COLS = ["timestamp", "sensor_node_id", "field_zone"]   # المفتاح لكشف المكررات
+ID_COLS = ["sensor_node_id"]   
+KEY_COLS = ["timestamp", "sensor_node_id", "field_zone"]  
 
-# عتبات الأعلام في عمود notes
-LEAK_F1 = 0.80        # شجرة بمتغير واحد تتجاوز هذا macro-F1 => مشتبه بالتسرب
-CORR_THR = 0.95       # ارتباط مرتفع
-VIF_THR = 10.0        # VIF مرتفع
-OUT_THR = 5.0         # % شواذ IQR مرتفعة
-SKEW_THR = 1.0        # التواء مرتفع
-ASSOC_THR = 0.90      # Cramer's V >= هذا => ارتباط شبه كامل بالـ target
-ETA2_THR = 0.50       # eta^2 (ANOVA) >= هذا => المتغير يفسّر نصف تباين الـ target
-CONTAM = 0.01         # نسبة الشواذ المتوقعة لـ Isolation Forest و LOF (1%)
 
-# تصنيف المتغيرات إلى عائلات (family) كما في الوثيقة
+LEAK_F1 = 0.80   
+CORR_THR = 0.95       
+VIF_THR = 10.0       
+OUT_THR = 5.0         
+SKEW_THR = 1.0       
+ASSOC_THR = 0.90      
+ETA2_THR = 0.50      
+CONTAM = 0.01        
+
+# define the variables families:
 FAMILY = {
     "timestamp": "Temporal",
     "sensor_node_id": "IoT", "field_zone": "Spatial",
@@ -67,7 +57,7 @@ FAMILY = {
 
 
 # ----------------------------------------------------------------------
-# 1) تحديد نوع كل عمود: numeric / categorical / datetime / id / target
+# 1) specify the type of each variable : numeric / categorical / datetime / id / target
 # ----------------------------------------------------------------------
 def infer_type(col: str, s: pd.Series) -> str:
     if col == TARGET:
@@ -82,7 +72,7 @@ def infer_type(col: str, s: pd.Series) -> str:
 
 
 # ----------------------------------------------------------------------
-# 2) إحصاءات وصفية للمتغيرات العددية
+# 2) descriptive statistics on numerical variables:
 # ----------------------------------------------------------------------
 def numeric_stats(s: pd.Series) -> dict:
     x = s.dropna()
@@ -90,36 +80,36 @@ def numeric_stats(s: pd.Series) -> dict:
     return {
         "min": x.min(), "q1": q1, "median": med, "q3": q3, "max": x.max(),
         "mean": x.mean(), "std": x.std(),
-        "skewness": x.skew(),          # الالتواء
-        "kurtosis": x.kurt(),          # التفرطح الزائد (excess): 0 = توزيع طبيعي
+        "skewness": x.skew(),          # skewness
+        "kurtosis": x.kurt(),          # kurtosis: 0 = normal distribution
         "iqr": q3 - q1,
     }
 
 
 # ----------------------------------------------------------------------
-# 3) كشف الشواذ بأربع طرق (لكل متغير عددي على حدة، أحادي البعد)
+# 3) Detection of outliers using 3 methods:
 # ----------------------------------------------------------------------
 def outlier_stats(s: pd.Series, n_total: int) -> dict:
     x = s.dropna().to_numpy().reshape(-1, 1)
     flat = x.ravel()
 
-    # (أ) IQR: خارج [Q1 - 1.5*IQR , Q3 + 1.5*IQR]
+    # A-IQR: [Q1 - 1.5*IQR , Q3 + 1.5*IQR]
     q1, q3 = np.percentile(flat, [25, 75])
     iqr = q3 - q1
     n_iqr = int(((flat < q1 - 1.5 * iqr) | (flat > q3 + 1.5 * iqr)).sum())
 
-    # (ب) z-score: |z| > 3
+    # B- z-score: |z| > 3
     sd = flat.std()
     n_z = int((np.abs((flat - flat.mean()) / sd) > 3).sum()) if sd > 0 else 0
 
-    # (ج) Isolation Forest (contamination=CONTAM)
+    # C- Isolation Forest (contamination=CONTAM)
     if np.unique(flat).size > 1:
         iso = IsolationForest(random_state=SEED, contamination=CONTAM, n_jobs=-1)
         n_if = int((iso.fit_predict(x) == -1).sum())
-        # (د) LOF (contamination=CONTAM)
+    # D LOF (contamination=CONTAM)
         lof = LocalOutlierFactor(n_neighbors=20, contamination=CONTAM, n_jobs=-1)
         n_lof = int((lof.fit_predict(x) == -1).sum())
-    else:                                    # متغير ثابت: لا شواذ
+    else:                                    # no outlier 
         n_if = n_lof = 0
 
     pct = lambda n: round(100.0 * n / n_total, 2)
@@ -130,19 +120,17 @@ def outlier_stats(s: pd.Series, n_total: int) -> dict:
 
 
 # ----------------------------------------------------------------------
-# 4) الارتباط الأعظمي (Pearson) و VIF لكل متغير عددي
+# 4) (Pearson) & VIF :
 # ----------------------------------------------------------------------
 def corr_and_vif(df: pd.DataFrame, num_cols: list):
-    """يُرجع قاموسين: (max_abs_corr, corr_partner) و vif لكل متغير."""
+    """return 2 dictionaries  (max_abs_corr, corr_partner)  and vif for each variable."""
     X = df[num_cols].dropna()
     corr_arr = X.corr().abs().to_numpy().copy()
-    np.fill_diagonal(corr_arr, 0.0)          # نستبعد ارتباط المتغير بنفسه
+    np.fill_diagonal(corr_arr, 0.0)          #  do not concider the self correlation
     corr = pd.DataFrame(corr_arr, index=num_cols, columns=num_cols)
 
     corr_info = {c: (corr[c].max(), corr[c].idxmax()) for c in num_cols}
 
-    # VIF_i = العنصر i في القطر من معكوس مصفوفة الارتباط
-    # (يعادل 1/(1-R^2) من انحدار المتغير على بقية المتغيرات)
     R = X.corr().to_numpy()
     vif_vals = np.diag(np.linalg.pinv(R))
     vif = dict(zip(num_cols, vif_vals))
@@ -150,7 +138,7 @@ def corr_and_vif(df: pd.DataFrame, num_cols: list):
 
 
 # ----------------------------------------------------------------------
-# 5) الارتباط بالـ target: ANOVA للعددي، chi2 للفئوي
+# 5) correlation with target: ANOVA  for numerical، chi2  for categorical
 # ----------------------------------------------------------------------
 def target_association(s: pd.Series, y: pd.Series, kind: str):
     mask = s.notna()
@@ -161,9 +149,9 @@ def target_association(s: pd.Series, y: pd.Series, kind: str):
             return "", np.nan
         F, p = stats.f_oneway(*groups)
         k, N = len(groups), len(s)
-        eta2 = F * (k - 1) / (F * (k - 1) + (N - k))   # حجم الأثر: نسبة التباين المفسَّر
+        eta2 = F * (k - 1) / (F * (k - 1) + (N - k))  
         return f"anova_F={F:.1f}; eta2={eta2:.2f}", p
-    # فئوي / id: اختبار chi2 على جدول التقاطع
+    
     table = pd.crosstab(s, y)
     chi2, p, _, _ = stats.chi2_contingency(table)
     n = table.to_numpy().sum()
@@ -172,15 +160,14 @@ def target_association(s: pd.Series, y: pd.Series, kind: str):
 
 
 # ----------------------------------------------------------------------
-# 6) اختبار التسرب: شجرة عمقها 2 على متغير واحد فقط (macro-F1 بـ CV)
-#    إن كان متغير وحده يفسّر الـ target تقريباً => مشتبه بالتسرب
+# 6) Test leackage using tree of depth =2  (CV by macro-F1) 
 # ----------------------------------------------------------------------
 def single_feature_f1(s: pd.Series, y: pd.Series, kind: str) -> float:
     if kind == "datetime":
         return np.nan
     if kind == "numeric":
         X = s.fillna(s.median()).to_numpy().reshape(-1, 1)
-    else:                                    # فئوي: ترميز one-hot
+    else:                                    #  one-hot encoding for categorecal var 
         X = pd.get_dummies(s.astype("string").fillna("missing")).to_numpy()
     cv = StratifiedKFold(5, shuffle=True, random_state=SEED)
     tree = DecisionTreeClassifier(max_depth=2, random_state=SEED)
@@ -188,12 +175,10 @@ def single_feature_f1(s: pd.Series, y: pd.Series, kind: str) -> float:
 
 
 # ----------------------------------------------------------------------
-# 7) بناء الملاحظات (notes) تلقائياً من الأرقام السابقة
+# 7)  (notes) :
 # ----------------------------------------------------------------------
 def build_notes(row: dict, leak_f1: float) -> str:
     notes = []
-    # قاعدة تسرب إضافية: ارتباط شبه كامل بالـ target (يلتقط المتغيرات الثنائية
-    # مثل irrigation_status التي لا تستطيع شجرة بمتغير واحد فصل 5 فئات بها)
     assoc = str(row.get("target_assoc", ""))
     strong = False
     if "cramers_v=" in assoc:
@@ -223,7 +208,7 @@ def build_notes(row: dict, leak_f1: float) -> str:
 
 
 # ----------------------------------------------------------------------
-# 8) الدالة الرئيسية
+# 8) function main :
 # ----------------------------------------------------------------------
 def main(data_path: str, out_path: str):
     df = pd.read_csv(data_path)
@@ -231,11 +216,11 @@ def main(data_path: str, out_path: str):
     n_total = len(df)
     y = df[TARGET]
 
-    # أنواع الأعمدة
+# column type:
     types = {c: infer_type(c, df[c]) for c in df.columns}
     num_cols = [c for c in df.columns if types[c] == "numeric"]
 
-    # مكررات المفتاح (timestamp + node + zone) تُسجَّل في كل الأسطر
+    # key identifiers duplicates  (timestamp + node + zone) 
     n_dup_key = int(df.duplicated(subset=KEY_COLS).sum())
     n_dup_rows = int(df.duplicated().sum())
 
@@ -255,7 +240,7 @@ def main(data_path: str, out_path: str):
             "n_duplicates_key": n_dup_key,
         }
 
-        # --- أعمدة خاصة بالعددي فقط (تبقى فارغة لغيره) ---
+        # --- Columns specified to numerical variables (be empty for the others) ---
         num_keys = ["min", "q1", "median", "q3", "max", "mean", "std", "skewness",
                     "kurtosis", "iqr", "n_out_iqr", "pct_out_iqr", "n_out_z",
                     "pct_out_z", "n_out_if", "pct_out_if", "n_out_lof",
@@ -267,10 +252,10 @@ def main(data_path: str, out_path: str):
             row["max_abs_corr"], row["corr_partner"] = corr_info[col]
             row["vif"] = vif[col]
 
-        # --- عدد الأنماط (modalities) للفئوي/المعرّف/الـ target ---
+        # ---  (modalities) for categorical variables  ---
         row["modalities"] = int(s.nunique()) if kind in ("categorical", "id", "Target") else np.nan
 
-        # --- الارتباط بالـ target (لا معنى له للـ target نفسه ولا للتاريخ) ---
+        # --- correlation of categorical variables with the target ---
         if kind in ("numeric", "categorical", "id"):
             row["target_assoc"], row["target_pval"] = target_association(s, y, kind)
             f1 = single_feature_f1(s, y, kind)
@@ -280,7 +265,7 @@ def main(data_path: str, out_path: str):
         row["notes"] = build_notes(row, f1)
         rows.append(row)
 
-    # ترتيب الأعمدة حسب مخطط الوثيقة
+    # the required columns in the file :
     order = ["variable", "family", "type", "n_total", "n_missing", "pct_missing",
              "n_unique", "n_duplicates_key", "min", "q1", "median", "q3", "max",
              "mean", "std", "skewness", "kurtosis", "iqr", "n_out_iqr",
@@ -289,16 +274,16 @@ def main(data_path: str, out_path: str):
              "modalities", "target_assoc", "target_pval", "notes"]
     out = pd.DataFrame(rows)[order]
 
-    # الأعمدة العدّادية تبقى أعداداً صحيحة رغم وجود خانات فارغة (Int64 يقبل NA)
+      
     for c in ["n_out_iqr", "n_out_z", "n_out_if", "n_out_lof", "modalities"]:
         out[c] = out[c].astype("Int64")
 
-    # تدوير الأرقام العشرية (الصيغة: UTF-8، فاصلة، نقطة عشرية)
+    # rotation to the unit of floats
     float_cols = out.select_dtypes("float").columns.drop("target_pval")
     out[float_cols] = out[float_cols].round(4)
     out.to_csv(out_path, index=False, encoding="utf-8")
 
-    # ملخص سريع على الشاشة
+    #  print the summary :
     print(f"rows={n_total}, columns={df.shape[1]}, full-row duplicates={n_dup_rows}, "
           f"key duplicates={n_dup_key}")
     print(f"saved -> {out_path}")
