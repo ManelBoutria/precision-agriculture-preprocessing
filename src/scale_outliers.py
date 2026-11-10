@@ -1,7 +1,7 @@
-"""scale_outliers.py - takes the cleaned dataset (leakage columns already removed)
-and writes a new dataset with the outliers capped and the numeric columns scaled.
+"""scale_outliers.py - takes the dataset and writes a new one with the leakage columns removed,
+the outliers capped and the numeric columns scaled.
 
-    python src/scale_outliers.py                 # reads data/coded_data.csv, writes data/final_data*.csv
+    python src/scale_outliers.py   # reads data/precision_agriculture_dataset.csv, writes data/final_data*.csv
     python src/scale_outliers.py --input data/coded_data.csv --output data/final_data.csv
     python src/scale_outliers.py --scaler standard        # instead of robust
 
@@ -10,8 +10,11 @@ What it does (uses Student 2's outliers_scaling.py):
      (rows are never removed). rainfall_mm, solar_radiation_w_m2 and light_intensity_lux are
      NOT clipped: they are zero-inflated (IQR = 0), their large values are real events.
   2. Scaling: robust (median / IQR) by default, or standard (mean / std), on the numeric columns.
-  3. Text columns (timestamp, ids, zone), one-hot 0/1 columns and the target are left unchanged.
-     The input can be data_clean_1.csv (categories still as text) or coded_data.csv (one-hot done).
+  3. The 3 irrigation columns (irrigation_status, irrigation_amount_l, water_flow_rate_l_min)
+     reveal the target: they are REMOVED, whatever the input file.
+  4. crop_type, growth_stage and sensor_status are one-hot encoded (0/1 columns) if still text.
+     timestamp, ids, zone, one-hot 0/1 columns and the target are left unchanged.
+     The input can be the original dataset, data_clean_1.csv (categories as text) or coded_data.csv (one-hot).
      A saved index column ("Unnamed: 0") is dropped.
 
 NO LEAKAGE: the clipping bounds and the scaler statistics are learned on the DEVELOPMENT rows
@@ -41,11 +44,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 from outliers_scaling import ZERO_INFLATED, OutlierClipper, get_scaler  # noqa: E402
 
 TARGET = "environmental_condition"
+CAT_COLS = ["crop_type", "growth_stage", "sensor_status"]
+LEAKAGE_COLS = ["irrigation_status", "irrigation_amount_l", "water_flow_rate_l_min"]
 TIME_COL = "timestamp"
 
 
 def run(df, scaler_kind="robust", factor=1.5, splits_dir="results/splits"):
     df = df.loc[:, ~df.columns.str.startswith("Unnamed")].copy()      # drop a saved index column
+    # the 3 irrigation columns reveal the target (fixed group rule): always removed, also their
+    # one-hot versions (irrigation_status_On ...) if the input is already encoded
+    df = df.drop(columns=[c for c in df.columns if c in LEAKAGE_COLS or c.startswith("irrigation_status")])
+    # categories still as text -> one-hot 0/1 columns (crop_type_Wheat ...), so the file is model-ready
+    text_cats = [c for c in CAT_COLS if c in df.columns]
+    df = pd.get_dummies(df, columns=text_cats, dtype=int)
     t = pd.to_datetime(df[TIME_COL])
     assert t.is_monotonic_increasing, "rows must be sorted by timestamp (do not reorder the file)"
     # dev / test rows come from Student 3's make_splits.py (row numbers of the original CSV).
