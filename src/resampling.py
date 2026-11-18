@@ -1,4 +1,4 @@
-"""resampling.py - Student 4, week 2.
+"""resampling.py.
 
 Compares ways of handling class imbalance (Heat_Stress 4%, High_Humidity 7%)
 on the 30 shared folds. Every strategy lives INSIDE the imblearn pipeline, so
@@ -15,8 +15,7 @@ Out:  results/resampling_summary.csv      (mean/std over 30 folds + paired diff 
       results/resampling_recall_by_class.csv
       figures/resampling_comparison.png
 
-Caveat for the report: SMOTE/ADASYN run after one-hot encoding, so the synthetic
-rows can have fractional values in one-hot columns. Fine for a comparison; mention it.
+
 """
 import sys
 import warnings
