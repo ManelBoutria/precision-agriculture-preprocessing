@@ -1,6 +1,6 @@
-"""feature_selection.py - Student 4, week 2.
+
  
-Compares three families of selectors, all fitted on the TRAINING part of each
+"""Compares three families of selectors, all fitted on the TRAINING part of each
 of the 30 shared folds (3x10 repeated stratified CV from make_splits.py):
  
   anova : filter   - SelectKBest(f_classif)
